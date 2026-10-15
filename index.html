@@ -269,7 +269,6 @@ kbd{
   </div>
 
   <div class="overlay" id="ovWin" hidden>
-    <h2>The hollow is lit</h2>
     <dl class="stats">
       <div><dt>Embers</dt><dd id="winEmbers">0/0</dd></div>
       <div><dt>Coins</dt><dd id="winCoins">0</dd></div>
@@ -360,12 +359,12 @@ ctx.imageSmoothingEnabled = false;
 
 // Mario sprites: frames 1-3 run right, 4-6 run left. Drawn at native pixels on the 2x canvas.
 const SPR = [1, 2, 3, 4, 5, 6].map(n => { const im = new Image(); im.src = `sprites/mario${n}.png`; return im; });
-const FEET = [54, 54, 52, 54, 54, 52]; // last opaque row in each frame
+const FEET = [53, 53, 51, 53, 53, 51]; // last opaque row in each frame
 const BODY_X = 16; // body centre column in the right-facing frames
 // There's no crouch frame in the sprite set, so one is built from each standing frame (1 and 4):
-// head, arms and gun (rows 0-38) stay as they are, and the legs (rows 39-54) fold into 6 rows,
+// head, arms and gun (rows 0-38) stay as they are, and the legs (rows 39-53) fold into 6 rows,
 // giving a 45-row pose with the feet on its last row.
-const CROUCH_ROWS = [41, 45, 49, 51, 53, 54];
+const CROUCH_ROWS = [41, 45, 49, 51, 52, 53];
 const CROUCH = [null, null];
 function makeCrouch(im) {
   const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = 39 + CROUCH_ROWS.length;
