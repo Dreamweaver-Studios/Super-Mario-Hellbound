@@ -487,8 +487,9 @@ const LEVELS = [
     b.check(90, 13);
     b.ground(96, 99, 12); b.mush(96, 11); b.ground(100, 103, 10); b.ember(100, 9); b.ember(103, 9); b.enemy(100, 103, 9);
     b.ground(107, 118, 10); b.enemy(108, 117, 9); b.row(110, 116, 8, 3);
-    b.ground(119, 130, 14); b.enemy(119, 122, 13); b.spikes(123, 124, 13); b.enemy(126, 130, 13);
-    b.plat(133, 135, 12); b.plat(138, 140, 10); b.ember(139, 9); b.plat(143, 145, 12);
+    b.ground(119, 130, 14); b.spikes(123, 124, 13);
+    // These two guard the plank chain rather than the pit below the shelf, so Mario can shoot them across the gap from the shelf
+    b.plat(133, 135, 12); b.plat(138, 140, 10); b.ember(139, 9); b.enemy(138, 140, 9); b.plat(143, 145, 12); b.enemy(143, 145, 11);
     b.ground(147, 186, 14); b.mush(148, 13); b.enemy(150, 158, 13);
     b.plat(160, 163, 11); b.row(161, 162, 10); b.enemy(160, 163, 10); b.enemy(165, 172, 13); b.spikes(174, 175, 13); b.enemy(180, 186, 13);
     // Part 3 (176-256): moving platform, climb, spike run, elevator to a high ledge
@@ -496,14 +497,16 @@ const LEVELS = [
     b.mover(188, 12, 3, 196, 12, 320);
     b.ground(201, 210, 12); b.enemy(202, 209, 11); b.row(203, 207, 10, 2);
     b.ground(211, 215, 10); b.enemy(211, 215, 9); b.ground(216, 220, 8); b.ember(217, 7); b.ember(219, 7);
-    b.ground(221, 240, 14); b.mush(222, 13); b.spikes(225, 226, 13); b.enemy(227, 230, 13); b.spikes(231, 232, 13); b.enemy(234, 240, 13);
+    b.ground(221, 240, 14); b.mush(222, 13); b.spikes(225, 226, 13); b.spikes(231, 232, 13);
+    b.enemy(236, 237, 13); b.enemy(238, 239, 13); // far enough from the drop that Mario can shoot them from where he lands
     b.mover(242, 13, 3, 242, 7, 300);
-    b.ground(247, 256, 8); b.enemy(248, 255, 7); b.ember(250, 6); b.ember(253, 6); b.bluemush(256, 7); // reward for the climb
+    b.ground(247, 256, 8); b.check(248, 7); b.ember(250, 6); b.ember(253, 6); b.bluemush(256, 7); // reward for the climb
     // Part 4 (257-351): long ride, last planks, the kiln door
-    b.ground(257, 270, 14); b.check(260, 13); b.enemy(262, 266, 13);
+    // A walkway one step below the ledge, with two beasts at its far end that Mario can shoot from the ledge
+    b.ground(257, 270, 9); b.enemy(265, 267, 8); b.enemy(268, 270, 8);
     b.mover(272, 11, 3, 284, 11, 300); b.row(274, 284, 9, 5);
     b.ground(289, 300, 12); b.mush(289, 11); b.enemy(290, 299, 11);
-    b.ground(301, 312, 14); b.enemy(301, 304, 13); b.spikes(305, 306, 13); b.enemy(308, 312, 13);
+    b.ground(301, 312, 14); b.enemy(304, 306, 13); b.spikes(307, 308, 13); b.enemy(308, 312, 13);
     b.plat(315, 317, 12); b.plat(320, 322, 10); b.ember(321, 9); b.enemy(320, 322, 9); b.plat(325, 327, 12);
     b.ground(329, 351, 14); b.mush(330, 13); b.enemy(333, 341, 13); b.row(334, 340, 11, 3);
     b.bluemush(343, 13); // a big heal before the boss checkpoint
@@ -523,7 +526,7 @@ const LEVELS = [
     b.coins(276, 282, 8, 2); b.coins(315, 317, 11); b.coin(325, 11); b.coin(327, 11);
     // 6 cracked blocks x 5 hidden coins, plus the hidden 1-up
     b.oneup(0, 13); // behind the start
-    b.crack(13, 13); b.crack(40, 13); b.crack(98, 11); b.crack(218, 7); b.crack(268, 13); b.crack(346, 13);
+    b.crack(13, 13); b.crack(40, 13); b.crack(98, 11); b.crack(218, 7); b.crack(259, 8); b.crack(346, 13);
   }},
 ];
 const TITLE_LEVEL = Math.max(0, LEVELS.findIndex(d => d.name === 'Hell'));
