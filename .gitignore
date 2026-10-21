@@ -2,3 +2,11 @@
 Super Mario Hellbound.html
 # Local notes; README.md is the repo's readme
 README.txt
+
+# GBA port: build output (run gba\build.ps1 to make the ROMs)
+gba/game/build*/
+*.elf
+*.gba
+*.sav
+gba/test/shots/
+gba/tools/node_modules/
