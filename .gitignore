@@ -7,6 +7,8 @@ README.txt
 gba/game/build*/
 *.elf
 *.gba
+# ...except the playable ROM, so it can be downloaded (user, 2026-10-23)
+!gba/sm-hellbound.gba
 *.sav
 gba/test/shots/
 gba/tools/node_modules/
