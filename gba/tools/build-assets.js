@@ -797,25 +797,40 @@ LEVELS.forEach(({ def, L }, i) => {
   h += `\nnamespace ${ns}\n{\n    constexpr uint8_t grid[${ROWS * L.w}] = {\n${L.grid.map(r => '        ' + r.join(',')).join(',\n')}\n    };\n`;
   h += arr('point', 'coins', L.coins, c => `{${n(c.x)}, ${n(c.y)}}`);
   h += arr('point', 'embers', L.embers, e => `{${n(e.x)}, ${n(e.y)}}`);
-  h += arr('mush_def', 'mushrooms', L.mush, m => `{${n(m.x)}, ${n(m.y)}, ${m.blue ? 'true' : 'false'}}`);
+  // (then Hard's extra blue mushroom, levels.js hardBlueMush; level_info::hard_extra_mushrooms counts it)
+  const hardMush = def.hardBlue ? levels.build({ ...def, build: b => b.bluemush(...def.hardBlue) }).mush : [];
+  h += arr('mush_def', 'mushrooms', [...L.mush, ...hardMush], m => `{${n(m.x)}, ${n(m.y)}, ${m.blue ? 'true' : 'false'}}`);
   h += arr('point', 'oneup_blocks', [...L.oneupBlocks], k => `{${k}}`);
   // (then the GBA-only flying demons, kind 4 = FOE_DEMON: a 12x14 body (20x24 until they were made 40% smaller)
   // patrolling columns a to b, its middle on the row's; the level's own enemies have kind -1, the level's foe)
   // Reapers are 10% smaller than the web game's (2026-10-20): hitbox 25x31 instead of 27x34, same middle, same feet
   const shrink = e => def.foe === 'death' ? { ...e, x: e.x + 1, a: e.a + 1, b: e.b + 1, w: e.w - 2, y: e.y + 3, h: e.h - 3 } : e;
-  const enemies = [...L.enemies.map(e => ({ ...shrink(e), kind: -1 })),
-    ...(def.flyers || []).map(([a, b, row]) => ({ x: a * T, y: row * T + 8 - 7, w: 12, h: 14, a: a * T, b: b * T, kind: 4 }))];
+  // Hard (levels.js hardSplits): each split alien is Normal-only, and its two halves are Hard-only. The list is the
+  // enemies both difficulties have, then the Normal-only ones, then the Hard-only ones (level_info::normal_only_n and
+  // hard_only_n); the game sorts them by x itself.
+  const splits = def.hardSplits || [];
+  const isSplit = e => splits.some(([x0, x1, row]) => e.a === x0 * T && e.b === x1 * T + T - e.w && e.y === (row + 1) * T - e.h);
+  const halves = splits.flatMap(([x0, x1, row]) => { const m = x0 + Math.floor((x1 - x0 + 1) / 2); return [[x0, m - 1, row], [m, x1, row]]; });
+  const normalOnly = L.enemies.filter(isSplit);
+  if (normalOnly.length !== splits.length) throw new Error(`${def.name}: found ${normalOnly.length} of the ${splits.length} aliens to split`);
+  // (plus Hard's own extra enemies and flying demons: levels.js HARD_ENEMIES, hardFlyerSpots)
+  const hardOnly = levels.build({ ...def, build: b => [...halves, ...(def.hardEnemies || [])].forEach(a => b.enemy(...a)) }).enemies;
+  const enemies = [...L.enemies.filter(e => !isSplit(e)).map(e => ({ ...shrink(e), kind: -1 })),
+    ...(def.flyers || []).map(([a, b, row]) => ({ x: a * T, y: row * T + 8 - 7, w: 12, h: 14, a: a * T, b: b * T, kind: 4 })),
+    ...normalOnly.map(e => ({ ...shrink(e), kind: -1 })), ...hardOnly.map(e => ({ ...shrink(e), kind: -1 })),
+    ...(def.hardFlyers || []).map(([a, b, row]) => ({ x: a * T, y: row * T + 8 - 7, w: 12, h: 14, a: a * T, b: b * T, kind: 4 }))];
+  const hardOnlyN = hardOnly.length + (def.hardFlyers || []).length;
   h += arr('enemy_def', 'enemies', enemies, e => `{${n(e.x)}, ${n(e.y)}, ${e.w}, ${e.h}, ${n(e.a)}, ${n(e.b)}, ${e.kind}}`);
   h += arr('mover_def', 'movers', L.movers, m => `{${m.x0}, ${m.y0}, ${m.x1}, ${m.y1}, ${m.w}, ${m.period}}`);
   h += arr('check_def', 'checks', L.checks, c => `{${c.x}, ${c.y}, ${c.row}}`);
   h += '}\n';
   const len = a => a.length;
   infos.push(`    { "${DISPLAY_NAMES[def.name] || def.name}", ${L.w}, ${bgWidths[def.name]}, ${FOE[def.gbaFoe || def.foe]}, ${THEME[STYLE[def.name]]}, ${ns}::grid, ` +
-    `${ns}::coins, ${len(L.coins)}, ${ns}::embers, ${len(L.embers)}, ${ns}::mushrooms, ${len(L.mush)}, ${ns}::oneup_blocks, ${L.oneupBlocks.size}, ` +
+    `${ns}::coins, ${len(L.coins)}, ${ns}::embers, ${len(L.embers)}, ${ns}::mushrooms, ${len(L.mush) + hardMush.length}, ${ns}::oneup_blocks, ${L.oneupBlocks.size}, ` +
     `${ns}::enemies, ${len(enemies)}, ${ns}::movers, ${len(L.movers)}, ${ns}::checks, ${len(L.checks)}, {${L.start.x}, ${L.start.y}}, ` +
     `${L.door ? `true, {${L.door.x}, ${L.door.y}}` : 'false, {0, 0}'}, ` +
-    `${L.boss ? `true, ${L.boss.gate}, {${L.boss.door.x}, ${L.boss.door.y}}` : 'false, 0, {0, 0}'}, ${def.blockCoins}, {${def.star || [-1, -1]}}, {${def.flame || [-1, -1]}}, {${def.rocket || [-1, -1]}} }`);
-  console.log(`${def.name}: w ${L.w}, coins ${L.coins.length}, embers ${L.embers.length}, enemies ${L.enemies.length}${def.flyers && def.flyers.length ? ` + ${def.flyers.length} flying` : ''}, movers ${L.movers.length}, cracks ${L.cracks}, bg ${bgWidths[def.name]}px`);
+    `${L.boss ? `true, ${L.boss.gate}, {${L.boss.door.x}, ${L.boss.door.y}}` : 'false, 0, {0, 0}'}, ${def.blockCoins}, {${def.star || [-1, -1]}}, {${def.flame || [-1, -1]}}, {${def.rocket || [-1, -1]}}, ${normalOnly.length}, ${hardOnlyN}, ${L.checks.findIndex(c => c.col === def.hardDropCheck)}, ${def.hardDropMush.reduce((m, i) => m + 2 ** i, 0)}u, ${hardMush.length} }`);
+  console.log(`${def.name}: w ${L.w}, coins ${L.coins.length}, embers ${L.embers.length}, enemies ${L.enemies.length}${hardOnlyN ? ` (${L.enemies.length - splits.length + hardOnly.length} on Hard)` : ''}${def.flyers && def.flyers.length ? ` + ${def.flyers.length} flying` : ''}${def.hardFlyers && def.hardFlyers.length ? ` (+${def.hardFlyers.length} flying on Hard)` : ''}, movers ${L.movers.length}, cracks ${L.cracks}, bg ${bgWidths[def.name]}px`);
 });
 h += `\nconstexpr level_info levels[] = {\n${infos.join(',\n')}\n};\nconstexpr int level_count = ${LEVELS.length};\n`;
 // Levels with a rocket launcher keep their tile background's map in RAM, so rockets can blow spikes off it: the biggest

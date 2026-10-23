@@ -145,6 +145,113 @@ const MORE_ENEMIES = {
   'City 3': [[52, 54, 7], [84, 86, 6], [123, 125, 10], [303, 305, 5]],
   'City 4': [[104, 106, 9], [195, 197, 12], [217, 219, 12], [312, 314, 9], [403, 405, 12], [421, 423, 13]],
 };
+// Hard: 12 more aliens in each World 1 level (user request, 2026-10-23), and 12 more mech units in each World 3 level. The floors are nearly all patrolled already, so
+// on Hard 12 aliens with long patrols (6+ columns) become two aliens side by side, each walking half the stretch (the
+// user's choice). The longest patrols are split first, spread out along the level. hardSplits() returns their enemy()
+// arguments; build-assets keeps those aliens Normal-only and adds the halves as Hard-only. Not builder calls: the web
+// game and the checkers see the level as Normal has it.
+// World 3's mech units the same way (user request, 2026-10-23: about 12 more each; World 3 is as full as World 1)
+const HARD_SPLITS = { Jungle: 12, 'Jungle 2': 12, 'Jungle 3': 12, 'Jungle 4': 12, City: 12, 'City 2': 12, 'City 3': 12, 'City 4': 12 };
+// Hard: 8 more reapers in each World 2 level (user request, 2026-10-23), as enemy() arguments: World 2 has room, so these
+// are new 2-column patrols on floor or planks (scratchpad pick_hard.js: two free rows above, max-min distance, at least 3
+// tiles from any reaper's whole patrol, 5 columns from each other and checkpoints, 10 from the start, away from spikes,
+// mushrooms and power-ups). Hard-only, like the splits; HARD_FLYERS more flying demons come with them (hardFlyerSpots).
+const HARD_ENEMIES = {
+  Graveyard: [[29, 31, 8], [66, 68, 11], [90, 92, 7], [102, 104, 11], [197, 199, 13], [259, 261, 10], [307, 309, 9], [345, 347, 10]],
+  'Graveyard 2': [[27, 29, 8], [52, 54, 8], [62, 64, 8], [67, 69, 10], [156, 158, 9], [254, 256, 8], [264, 266, 8], [349, 351, 6]],
+  'Graveyard 3': [[50, 52, 10], [60, 62, 10], [76, 78, 10], [108, 110, 9], [118, 120, 9], [245, 247, 7], [310, 312, 8], [340, 342, 7]],
+  'Graveyard 4': [[101, 103, 9], [130, 132, 5], [155, 157, 9], [204, 206, 10], [216, 218, 4], [259, 261, 5], [301, 303, 10], [357, 359, 8]],
+  // World 4-1 to 4-3: 5 more hell beasts each (user request, 2026-10-23), picked the same way but 10 columns from
+  // checkpoints and the exit door (beasts fire far)
+  'Underworld 1': [[32, 34, 10], [47, 49, 13], [351, 353, 13], [406, 408, 13], [549, 551, 7]],
+  'Underworld 2': [[53, 55, 8], [68, 70, 10], [184, 186, 13], [351, 353, 13], [399, 401, 8]],
+  'Underworld 3': [[177, 179, 13], [215, 217, 5], [355, 357, 13], [417, 419, 9], [563, 565, 5]],
+};
+// (and 8 more in each World 4 level, user request, 2026-10-23)
+// Hard has one checkpoint fewer in every level (user request, 2026-10-23): the one whose removal leaves the shortest
+// longest stretch between the start, the checkpoints and the exit. A boss level keeps the checkpoint by its arena.
+// Returns that checkpoint's column; build-assets marks it Normal-only.
+function hardDropCheck(def, calls) {
+  const L = mod.exports.build({ ...def, build: b => { for (const [m, a] of calls) b[m](...a); } });
+  const exit = L.boss ? L.boss.gate : Math.floor(L.door.x / 16), start = Math.floor(L.start.x / 16);
+  const cols = L.checks.map(c => c.col).sort((a, b) => a - b);
+  let best = null, longest = Infinity;
+  cols.forEach((c, i) => {
+    if (L.boss && i === cols.length - 1) return;
+    const p = [start, ...cols.filter(k => k !== c), exit], m = Math.max(...p.slice(1).map((x, k) => x - p[k]));
+    if (m < longest) { longest = m; best = c; }
+  });
+  return best;
+}
+// Hard has fewer red mushrooms in World 4 (user request, 2026-10-23): 3 fewer in 4-1 to 4-3, 2 in 4-4. Taken one at a
+// time where they're most bunched up: the red one whose removal leaves the shortest longest stretch between the start,
+// the mushrooms (blue ones count, and stay, as does Hard's own blue one, extra) and the exit, then the one with the
+// closest neighbours. None within 10 columns of a boss arena (the heal before the fight). Returns indexes into the
+// level's mushrooms; build-assets marks them Normal-only.
+// (and 2 fewer in World 1-1, all of World 2, and World 3-1, 3-2 and 3-4, user request, later the same day)
+const HARD_DROP_MUSH = { 'Underworld 1': 3, 'Underworld 2': 3, 'Underworld 3': 3, Hell: 2, Jungle: 2,
+  Graveyard: 2, 'Graveyard 2': 2, 'Graveyard 3': 2, 'Graveyard 4': 2, City: 2, 'City 2': 2, 'City 4': 2 };
+function hardDropMush(def, calls, n, extra = []) {
+  const L = mod.exports.build({ ...def, build: b => { for (const [m, a] of calls) b[m](...a); } });
+  const exit = L.boss ? L.boss.gate : Math.floor(L.door.x / 16), start = Math.floor(L.start.x / 16);
+  const col = i => L.mush[i].x / 16, left = L.mush.map((_, i) => i), out = [];
+  for (let k = 0; k < n; k++) {
+    let best = null, key = null;
+    for (const i of left) {
+      if (L.mush[i].blue || col(i) >= exit || (L.boss && col(i) >= exit - 10)) continue;
+      const p = [start, ...left.filter(j => j !== i).map(col), ...extra].sort((a, b) => a - b); p.push(exit);
+      const longest = Math.max(...p.slice(1).map((x, j) => x - p[j]));
+      const near = Math.min(...[...left.filter(j => j !== i).map(col), ...extra].map(x => Math.abs(x - col(i))));
+      if (! key || longest < key[0] || (longest === key[0] && near < key[1])) { best = i; key = [longest, near]; }
+    }
+    out.push(best); left.splice(left.indexOf(best), 1);
+  }
+  return out.sort((a, b) => a - b);
+}
+// Hard adds a blue mushroom to every level of Worlds 1-3 (user request, 2026-10-23): in the middle of the longest
+// stretch without one (placed before Hard's drops are chosen, so they leave room round it), on the floor under or beside a coin, at most 4 rows below it (the checkers
+// have every coin reachable, so Mario gets to that floor), not on a coin, not next to spikes. Returns bluemush() arguments [col, row]; build-assets adds it Hard-only.
+const HARD_BLUE = /^(Jungle|Graveyard|City)/;
+function hardBlueMush(def, calls) {
+  const L = mod.exports.build({ ...def, build: b => { for (const [m, a] of calls) b[m](...a); } }), g = L.grid, w = def.w;
+  const exit = L.boss ? L.boss.gate : Math.floor(L.door.x / 16), start = Math.floor(L.start.x / 16);
+  const at = (c, r) => (c < 0 || c >= w || r < 0 || r >= 17) ? 1 : g[r][c];
+  const p = [start, ...L.mush.map(m => Math.floor(m.x / 16)), exit].sort((a, b) => a - b);
+  let gi = 0; p.slice(1).forEach((x, i) => { if (x - p[i] > p[gi + 1] - p[gi]) gi = i; });
+  const target = (p[gi] + p[gi + 1]) / 2;
+  const coins = new Set(L.coins.map(c => `${Math.floor(c.x / 16)},${Math.floor(c.y / 16)}`));
+  let best = null;
+  for (const k of coins) {
+    const [cc, cr] = k.split(',').map(Number);
+    for (const c of [cc - 1, cc, cc + 1]) {
+      let r = cr; while (r < cr + 4 && at(c, r + 1) === 0) r++;   // down to the floor
+      if (c <= start + 3 || c >= exit - 3 || coins.has(`${c},${r}`)) continue;
+      if ([...Array(r - cr + 1).keys()].some(d => at(c, cr + d) !== 0) || at(c, r - 1) !== 0 || ! [1, 2].includes(at(c, r + 1))) continue;
+      if ([-2, -1, 0, 1, 2].some(d => at(c + d, r) === 3 || at(c + d, r + 1) === 3)) continue;
+      if (! best || Math.abs(c - target) < Math.abs(best[0] - target)) best = [c, r];
+    }
+  }
+  if (! best) throw new Error(`${def.name}: no spot for Hard's blue mushroom`);
+  return best;
+}
+const HARD_FLYERS = { Graveyard: 5, 'Graveyard 2': 5, 'Graveyard 3': 5, 'Graveyard 4': 5,
+  'Underworld 1': 8, 'Underworld 2': 8, 'Underworld 3': 8, Hell: 8 };
+function hardSplits(calls, n) {
+  const long = calls.filter(([m, a]) => m === 'enemy' && a[1] - a[0] + 1 >= 6).map(([, a]) => a);
+  if (long.length < n) throw new Error(`only ${long.length} alien patrols are long enough to split, not ${n}`);
+  const picked = [], mid = a => (a[0] + a[1]) / 2;
+  while (picked.length < n) {
+    // The longest patrol, then the furthest from those already picked
+    let best = null, key = null;
+    for (const a of long) {
+      if (picked.includes(a)) continue;
+      const k = [a[1] - a[0], picked.length ? Math.min(...picked.map(b => Math.abs(mid(a) - mid(b)))) : 0];
+      if (!best || k[0] > key[0] || (k[0] === key[0] && k[1] > key[1])) { best = a; key = k; }
+    }
+    picked.push(best);
+  }
+  return picked.sort((a, b) => a[0] - b[0]);
+}
 // Flying demons (user request, 2026-10-20: 7-10 more enemies in each of Worlds 2-1 to 2-4, flying, 2 HP, Gothicvania's
 // demon art): how many per level. GBA-only; not builder calls, so the web game and the checkers don't see them. Each is
 // [a, b, row]: it patrols columns a to b with its middle on row 'row' (main.cpp FOE_DEMON).
@@ -154,28 +261,53 @@ const FLYERS = { Graveyard: 8, 'Graveyard 2': 9, 'Graveyard 3': 9, 'Graveyard 4'
 // as near the stretch's middle as there's room: a 4-column patrol 4 rows above the highest floor under it (so Mario can
 // walk under it and has to shoot up at it), open air one tile around it, not over a pit (it could knock Mario in), not
 // over a checkpoint, not near the start.
-function flyerSpots(def, calls, n) {
+// Where a flying demon can patrol: a 4-column patrol 4 rows above the highest floor under it, open air one tile around it,
+// no pit under it, no checkpoint near, between start + 14 and exit - 6. spotAt(a) = [a, a + 4, row] or null.
+function flyerRoom(def, calls) {
   const L = mod.exports.build({ ...def, build: b => { for (const [m, a] of calls) b[m](...a); } }), g = L.grid, w = def.w;
   const exit = L.boss ? L.boss.gate : L.door ? Math.floor(L.door.x / 16) : w;
   const top = c => { for (let r = 0; r < 17; r++) if (g[r][c] !== 0) return r; return 17; };   // highest floor in a column
-  const start = Math.floor(L.start.x / 16) + 14, end = exit - 6, out = [];
+  const start = Math.floor(L.start.x / 16) + 14, end = exit - 6;
   const fits = (a, b, row) => {
     if (row < 4) return false;   // (higher is under the HUD)
     for (let c = a - 1; c <= b + 2; c++) for (let r = row - 1; r <= row + 1; r++) if (c < 0 || c >= w || g[r][c] !== 0) return false;
     return ! L.checks.some(k => k.x / 16 >= a - 4 && k.x / 16 <= b + 5);
   };
+  const spotAt = a => {
+    let floor = 17, pit = false; for (let c = a; c <= a + 5; c++) { floor = Math.min(floor, top(c)); pit = pit || top(c) === 17; }
+    return ! pit && fits(a, a + 4, floor - 4) ? [a, a + 4, floor - 4] : null;
+  };
+  return { start, end, spotAt };
+}
+function flyerSpots(def, calls, n) {
+  const { start, end, spotAt } = flyerRoom(def, calls), out = [];
   for (let i = 0; i < n; i++) {
     const lo = start + Math.floor((end - start) * i / n), hi = start + Math.floor((end - start) * (i + 1) / n) - 5, mid = Math.floor((lo + hi) / 2);
     let spot = null;
     for (let d = 0; ! spot && mid - d >= lo; d++) for (const a of d ? [mid + d, mid - d] : [mid]) {
       if (a < lo || a > hi) continue;
-      let floor = 17, pit = false; for (let c = a; c <= a + 5; c++) { floor = Math.min(floor, top(c)); pit = pit || top(c) === 17; }
-      if (! pit && fits(a, a + 4, floor - 4)) { spot = [a, a + 4, floor - 4]; break; }
+      if ((spot = spotAt(a))) break;
     }
     if (! spot) throw new Error(`${def.name}: no room for flying demon ${i + 1} between columns ${lo} and ${hi}`);
     out.push(spot);
   }
   return out;
+}
+// Hard's extra demons (user request, 2026-10-23: 5 more in each World 2 level): one at a time where there's room, as far
+// as possible from every demon already placed (max-min distance between patrol middles), at least 6 columns from any
+function hardFlyerSpots(def, calls, flyers, n) {
+  const { start, end, spotAt } = flyerRoom(def, calls), out = [], mids = flyers.map(([a, b]) => (a + b) / 2);
+  for (let i = 0; i < n; i++) {
+    let best = null, bd = -1;
+    for (let a = start; a <= end - 4; a++) {
+      const spot = spotAt(a); if (! spot) continue;
+      const d = Math.min(...mids.map(m => Math.abs(m - (a + 2))));
+      if (d > bd) { bd = d; best = spot; }
+    }
+    if (! best || bd < 6) throw new Error(`${def.name}: no room for Hard's flying demon ${i + 1}`);
+    out.push(best); mids.push(best[0] + 2);
+  }
+  return out.sort((x, y) => x[0] - y[0]);
 }
 // Fewer checkpoints (user requests, 2026-10-17): a third fewer in World 4 (9 -> 6 each), two fewer in each level of Worlds
 // 1-3; by column. Those kept are the most evenly spaced from the start to the door (a boss level: to its arena, always
@@ -331,8 +463,9 @@ const LEVELS = ordered.map(d => {
   if (DROP_CHECKS[d.name]) calls = calls.filter(([m, a]) => ! (m === 'check' && DROP_CHECKS[d.name].includes(a[0])));
   const [, scale, perBlock] = COIN_SCALE.find(([pre]) => d.name.startsWith(pre));
   calls = scaleCoins({ ...d, w }, calls, scale, COIN_EXTRA[d.name] || 0);
-  // Moving platforms 20% faster (user request, 2026-10-17): each cycle takes 1/1.2 of the web game's frames
-  calls = calls.map(([m, a]) => m === 'mover' ? [m, [...a.slice(0, 5), Math.round(a[5] / 1.2)]] : [m, a]);
+  // Moving platforms 20% faster (user request, 2026-10-17), then 20% faster again (user, 2026-10-23): each cycle takes
+  // 1/1.44 of the web game's frames
+  calls = calls.map(([m, a]) => m === 'mover' ? [m, [...a.slice(0, 5), Math.round(a[5] / 1.44)]] : [m, a]);
   // The extra 1-up blocks go in after scaleCoins, so no coin moves
   calls.push(...(EXTRA_ONEUPS[d.name] || []).map(a => ['oneup', a]));
   calls.push(...(EXTRA_ENEMIES[d.name] || []).map(a => ['enemy', a]));
@@ -353,8 +486,11 @@ const LEVELS = ordered.map(d => {
   calls = calls.filter(([m, a]) => ! (m === 'enemy' && drop.some(x => x.join() === a.join())));
   calls.push(...(MORE_ENEMIES[d.name] || []).map(a => ['enemy', a]));
   const flyers = FLYERS[d.name] ? flyerSpots({ ...d, w }, calls, FLYERS[d.name]) : [];
+  const hardBlue = HARD_BLUE.test(d.name) ? hardBlueMush({ ...d, w }, calls) : null;
   const build = b => { for (const [m, a] of calls) b[m](...a); };
-  return { ...d, w, calls, build, star, flame, rocket, flyers, blockCoins: perBlock ?? Math.round(5 * scale), half: half ? { at: half.at, len: half.len } : null };
+  return { ...d, w, calls, build, star, flame, rocket, flyers, hardSplits: HARD_SPLITS[d.name] ? hardSplits(calls, HARD_SPLITS[d.name]) : [], hardEnemies: HARD_ENEMIES[d.name] || [], hardDropCheck: hardDropCheck({ ...d, w }, calls),
+    hardBlue, hardDropMush: HARD_DROP_MUSH[d.name] ? hardDropMush({ ...d, w }, calls, HARD_DROP_MUSH[d.name], hardBlue ? [hardBlue[0]] : []) : [],
+    hardFlyers: HARD_FLYERS[d.name] ? hardFlyerSpots({ ...d, w }, calls, flyers, HARD_FLYERS[d.name]) : [], blockCoins: perBlock ?? Math.round(5 * scale), half: half ? { at: half.at, len: half.len } : null };
 });
 
 // One level as source for a stand-in LEVELS array (check-levels.js), with its build() spelled out call by call

@@ -4,9 +4,10 @@
 #   -StartLevel n  build a playable test ROM whose title screen starts the game at level n (gba\test\sm-hellbound-level<n>.gba)
 # GNU make can't cope with the spaces and brackets in this folder's path, so the gba folder is mapped to a spare drive
 # letter for the build and unmapped afterwards. Needs devkitPro's gba-dev (installed into MSYS2 at C:\msys64).
+#   -Hard      with -Autoplay: the test ROM plays on Hard (-DSMHB_HARD, own build folder)
 #   -Variant name  build a playable diagnostic ROM with -DSMHB_<NAME> (gba\test\sm-hellbound-<name>.gba), e.g. NO_DMG
 #                  (no synth tones) or NO_SFX (music only)
-param([switch]$Clean, [switch]$Autoplay, [int]$Scene = 1, [int]$StartLevel = 0, [string]$Variant = '')
+param([switch]$Clean, [switch]$Autoplay, [switch]$Hard, [int]$Scene = 1, [int]$StartLevel = 0, [string]$Variant = '')
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
 $letter = 'BCDEFGHIJKLMNOPQRSTUVWXYZ'.ToCharArray() | Where-Object { -not (Test-Path "$($_):\") } | Select-Object -Last 1
@@ -19,7 +20,9 @@ try {
   $v = $Variant.ToLower().Replace('_', '-')
   $target = if ($Autoplay) { 'sm-hellbound-autoplay' } elseif ($StartLevel -gt 0) { "sm-hellbound-level$StartLevel" } elseif ($Variant) { "sm-hellbound-$v" } else { 'sm-hellbound' }
   # Each scene gets its own build folder, since make doesn't notice a changed -D flag
-  $vars = if ($Autoplay) { "BUILD=build_autoplay$Scene TARGET=$target USERFLAGS='-DBN_CFG_AUDIO_MAX_SOUND_CHANNELS=10 -DBN_CFG_AUDIO_MIXING_RATE=BN_AUDIO_MIXING_RATE_21_KHZ -DSMHB_AUTOPLAY -DSMHB_SCENE=$Scene'" }
+  $h = if ($Hard) { 'h' } else { '' }
+  $hf = if ($Hard) { ' -DSMHB_HARD' } else { '' }
+  $vars = if ($Autoplay) { "BUILD=build_autoplay$Scene$h TARGET=$target USERFLAGS='-DBN_CFG_AUDIO_MAX_SOUND_CHANNELS=10 -DBN_CFG_AUDIO_MIXING_RATE=BN_AUDIO_MIXING_RATE_21_KHZ -DSMHB_AUTOPLAY -DSMHB_SCENE=$Scene$hf'" }
     elseif ($StartLevel -gt 0) { "BUILD=build_level$StartLevel TARGET=$target USERFLAGS='-DBN_CFG_AUDIO_MAX_SOUND_CHANNELS=10 -DBN_CFG_AUDIO_MIXING_RATE=BN_AUDIO_MIXING_RATE_21_KHZ -DSMHB_START_LEVEL=$($StartLevel - 1)'" }
     elseif ($Variant) { "BUILD=build_$v TARGET=$target USERFLAGS='-DBN_CFG_AUDIO_MAX_SOUND_CHANNELS=10 -DBN_CFG_AUDIO_MIXING_RATE=BN_AUDIO_MIXING_RATE_21_KHZ -DSMHB_$($Variant.ToUpper())'" }
     else { '' }

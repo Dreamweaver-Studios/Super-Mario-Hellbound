@@ -31,6 +31,11 @@ struct level_info
     point star_block;  // the cracked block holding the level's star (tiles; one per level, 2026-10-18)
     point flame_item;  // where the flamethrower pickup stands (tiles), or {-1, -1}: World 1-1 only (2026-10-18)
     point rocket_item; // where the rocket launcher pickup stands (tiles), or {-1, -1}: World 1-2 only (2026-10-19)
+    // enemies[] is the ones on both difficulties, then normal_only_n only on Normal, then hard_only_n only on Hard (2026-10-23)
+    int normal_only_n, hard_only_n;
+    int hard_skip_check;   // the checkpoint (index into checks[]) Hard leaves out, or -1 (2026-10-23)
+    uint32_t hard_skip_mushrooms;   // bit i: Hard leaves out mushrooms[i] (2026-10-23)
+    int hard_extra_mushrooms;       // the last this many of mushrooms[] are Hard's own (a blue one in Worlds 1-3)
 };
 
 #endif
