@@ -12,3 +12,6 @@ gba/game/build*/
 *.sav
 gba/test/shots/
 gba/tools/node_modules/
+# The PC package (gba\tools\package-pc.ps1): only its zip is kept, for downloading (user, 2026-10-23)
+gba/dist/*
+!gba/dist/*.zip
