@@ -163,7 +163,8 @@ const HARD_ENEMIES = {
   'Graveyard 4': [[101, 103, 9], [130, 132, 5], [155, 157, 9], [204, 206, 10], [216, 218, 4], [259, 261, 5], [301, 303, 10], [357, 359, 8]],
   // World 4-1 to 4-3: 5 more hell beasts each (user request, 2026-10-23), picked the same way but 10 columns from
   // checkpoints and the exit door (beasts fire far)
-  'Underworld 1': [[32, 34, 10], [47, 49, 13], [351, 353, 13], [406, 408, 13], [549, 551, 7]],
+  // World 4-1: 3 more (user request, 2026-10-24: 5 -> 8), from scratchpad pick_u1.js's legal spots, spread along the level
+  'Underworld 1': [[32, 34, 10], [47, 49, 13], [145, 147, 11], [311, 313, 11], [351, 353, 13], [406, 408, 13], [549, 551, 7], [673, 675, 11]],
   'Underworld 2': [[53, 55, 8], [68, 70, 10], [184, 186, 13], [351, 353, 13], [399, 401, 8]],
   'Underworld 3': [[177, 179, 13], [215, 217, 5], [355, 357, 13], [417, 419, 9], [563, 565, 5]],
 };
@@ -191,6 +192,11 @@ function hardDropCheck(def, calls) {
 // (and 2 fewer in World 1-1, all of World 2, and World 3-1, 3-2 and 3-4, user request, later the same day)
 const HARD_DROP_MUSH = { 'Underworld 1': 3, 'Underworld 2': 3, 'Underworld 3': 3, Hell: 2, Jungle: 2,
   Graveyard: 2, 'Graveyard 2': 2, 'Graveyard 3': 2, 'Graveyard 4': 2, City: 2, 'City 2': 2, 'City 4': 2 };
+// Expert has one red mushroom fewer than Hard in every level (user request, 2026-10-24): hardDropMush's next pick after
+// Hard's (it picks one at a time, so its first picks are Hard's own); level_info::expert_skip_mushrooms
+const EXPERT_DROP_MUSH = 1;
+// Hard leaves out these levels' star block (World 4-1, user, 2026-10-24); level_info::hard_no_star
+const HARD_NO_STAR = new Set(['Underworld 1']);
 function hardDropMush(def, calls, n, extra = []) {
   const L = mod.exports.build({ ...def, build: b => { for (const [m, a] of calls) b[m](...a); } });
   const exit = L.boss ? L.boss.gate : Math.floor(L.door.x / 16), start = Math.floor(L.start.x / 16);
@@ -235,9 +241,44 @@ function hardBlueMush(def, calls) {
   return best;
 }
 const HARD_FLYERS = { Graveyard: 5, 'Graveyard 2': 5, 'Graveyard 3': 5, 'Graveyard 4': 5,
-  'Underworld 1': 8, 'Underworld 2': 8, 'Underworld 3': 8, Hell: 8 };
-function hardSplits(calls, n) {
-  const long = calls.filter(([m, a]) => m === 'enemy' && a[1] - a[0] + 1 >= 6).map(([, a]) => a);
+  'Underworld 1': 10, 'Underworld 2': 8, 'Underworld 3': 8, Hell: 8 };   // World 4-1 8 -> 10 (user request, 2026-10-24)
+// Expert (user request, 2026-10-24: 10 more enemies than Hard in every World 1 and World 3 level): more of Hard's patrols
+// split the same way, picked from Hard's own list (its halves and extras included) down to 4 columns, so some halves are
+// 2 columns wide: an alien or mech with nowhere to walk stands guard (main.cpp). Expert is Hard plus these.
+const EXPERT_SPLITS = { Jungle: 10, 'Jungle 2': 10, 'Jungle 3': 10, 'Jungle 4': 10, City: 10, 'City 2': 10, 'City 3': 10, 'City 4': 10,
+  // World 2 (user request, 2026-10-24: 7 more reapers each): EXPERT_ENEMIES' new spots first, then splits for the rest,
+  // only of patrols 6+ columns long (EXPERT_SPLIT_MIN), so every half still walks
+  Graveyard: 4, 'Graveyard 2': 5, 'Graveyard 4': 3 };
+const EXPERT_SPLIT_MIN = { Graveyard: 6, 'Graveyard 2': 6, 'Graveyard 4': 6 };
+// Expert's new reapers in World 2 (user request, 2026-10-24), as enemy() arguments: free floor or planks, picked like
+// HARD_ENEMIES (scratchpad pick_x.js: two free rows above, max-min distance, 3+ tiles from every Normal/Hard reaper's
+// whole patrol, 5 columns from each other, checkpoints and the exit, 10 from the start, away from spikes, blocks,
+// mushrooms, power-ups and movers). Only these fit those rules; EXPERT_SPLITS makes up the rest to 7.
+const EXPERT_ENEMIES = {
+  Graveyard: [[133, 135, 8], [202, 204, 11], [212, 214, 11]],
+  'Graveyard 2': [[166, 168, 9], [376, 378, 11]],
+  'Graveyard 3': [[12, 14, 11], [22, 24, 11], [173, 175, 10], [183, 185, 10], [212, 214, 10], [266, 268, 10], [371, 373, 10]],
+  'Graveyard 4': [[54, 56, 6], [111, 113, 9], [249, 251, 9], [323, 325, 9]],
+  // World 4 (user request, 2026-10-24: 5 more hell beasts each): the same rules with beast spacing (pick_x.js ... 5 3 10 10:
+  // three free rows, 10 columns from checkpoints and the exit); of the spots that fit, the five furthest from Hard's extras
+  // and each other
+  'Underworld 1': [[65, 67, 11], [373, 375, 7], [498, 500, 9], [513, 515, 11], [599, 601, 11]],
+  'Underworld 2': [[134, 136, 11], [287, 289, 9], [484, 486, 7], [550, 552, 7], [667, 669, 11]],
+  'Underworld 3': [[40, 42, 11], [279, 281, 11], [503, 505, 11], [608, 610, 6], [671, 673, 8]],
+  Hell: [[52, 54, 11], [302, 304, 13], [398, 400, 9], [530, 532, 9], [669, 671, 11]],
+};
+// Expert's extra flying demons (user request, 2026-10-24: 3 more in each World 2 level), placed like Hard's
+// (hardFlyerSpots, away from Normal's and Hard's)
+const EXPERT_FLYERS = { Graveyard: 3, 'Graveyard 2': 3, 'Graveyard 3': 3, 'Graveyard 4': 3,
+  'Underworld 1': 5, 'Underworld 2': 5, 'Underworld 3': 5, Hell: 5 };   // (World 4: 5 more each, user request, same day)
+const half = ([x0, x1, row]) => { const m = x0 + Math.floor((x1 - x0 + 1) / 2); return [[x0, m - 1, row], [m, x1, row]]; };
+function hardPatrols(calls, splits, extra) {
+  const keys = splits.map(a => a.join()), out = [];
+  for (const [m, a] of calls) if (m === 'enemy') out.push(...(keys.includes(a.join()) ? half(a) : [a]));
+  return out.concat(extra);
+}
+function hardSplits(calls, n, min = 6) {
+  const long = calls.filter(([m, a]) => m === 'enemy' && a[1] - a[0] + 1 >= min).map(([, a]) => a);
   if (long.length < n) throw new Error(`only ${long.length} alien patrols are long enough to split, not ${n}`);
   const picked = [], mid = a => (a[0] + a[1]) / 2;
   while (picked.length < n) {
@@ -488,9 +529,13 @@ const LEVELS = ordered.map(d => {
   const flyers = FLYERS[d.name] ? flyerSpots({ ...d, w }, calls, FLYERS[d.name]) : [];
   const hardBlue = HARD_BLUE.test(d.name) ? hardBlueMush({ ...d, w }, calls) : null;
   const build = b => { for (const [m, a] of calls) b[m](...a); };
+  const hardFlyers = HARD_FLYERS[d.name] ? hardFlyerSpots({ ...d, w }, calls, flyers, HARD_FLYERS[d.name]) : [];
   return { ...d, w, calls, build, star, flame, rocket, flyers, hardSplits: HARD_SPLITS[d.name] ? hardSplits(calls, HARD_SPLITS[d.name]) : [], hardEnemies: HARD_ENEMIES[d.name] || [], hardDropCheck: hardDropCheck({ ...d, w }, calls),
-    hardBlue, hardDropMush: HARD_DROP_MUSH[d.name] ? hardDropMush({ ...d, w }, calls, HARD_DROP_MUSH[d.name], hardBlue ? [hardBlue[0]] : []) : [],
-    hardFlyers: HARD_FLYERS[d.name] ? hardFlyerSpots({ ...d, w }, calls, flyers, HARD_FLYERS[d.name]) : [], blockCoins: perBlock ?? Math.round(5 * scale), half: half ? { at: half.at, len: half.len } : null };
+    hardBlue, hardNoStar: HARD_NO_STAR.has(d.name), hardDropMush: HARD_DROP_MUSH[d.name] ? hardDropMush({ ...d, w }, calls, HARD_DROP_MUSH[d.name], hardBlue ? [hardBlue[0]] : []) : [],
+    expertDropMush: hardDropMush({ ...d, w }, calls, (HARD_DROP_MUSH[d.name] || 0) + EXPERT_DROP_MUSH, hardBlue ? [hardBlue[0]] : []),
+    expertSplits: EXPERT_SPLITS[d.name] ? hardSplits(hardPatrols(calls, HARD_SPLITS[d.name] ? hardSplits(calls, HARD_SPLITS[d.name]) : [], HARD_ENEMIES[d.name] || []).map(a => ['enemy', a]), EXPERT_SPLITS[d.name], EXPERT_SPLIT_MIN[d.name] || 4) : [],
+    expertEnemies: EXPERT_ENEMIES[d.name] || [],
+    hardFlyers, expertFlyers: EXPERT_FLYERS[d.name] ? hardFlyerSpots({ ...d, w }, calls, [...flyers, ...hardFlyers], EXPERT_FLYERS[d.name]) : [], blockCoins: perBlock ?? Math.round(5 * scale), half: half ? { at: half.at, len: half.len } : null };
 });
 
 // One level as source for a stand-in LEVELS array (check-levels.js), with its build() spelled out call by call

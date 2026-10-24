@@ -6,7 +6,7 @@
 // Shapes of the generated level data (world pixels, origin at the level's top-left)
 struct point { int x; int y; };
 struct mush_def { int x; int y; bool blue; };
-struct enemy_def { int x; int y; int w; int h; int a; int b; int kind; };  // a..b = patrol range of e.x; kind: -1 = the level's foe, else a FOE_ (main.cpp)
+struct enemy_def { int x; int y; int w; int h; int a; int b; int kind; int modes; };  // a..b = patrol range of e.x; kind: -1 = the level's foe, else a FOE_ (main.cpp); modes: bit 1 Normal, 2 Hard, 4 Expert
 struct mover_def { int x0; int y0; int x1; int y1; int w; int period; };
 struct check_def { int x; int y; int row; };
 
@@ -31,11 +31,12 @@ struct level_info
     point star_block;  // the cracked block holding the level's star (tiles; one per level, 2026-10-18)
     point flame_item;  // where the flamethrower pickup stands (tiles), or {-1, -1}: World 1-1 only (2026-10-18)
     point rocket_item; // where the rocket launcher pickup stands (tiles), or {-1, -1}: World 1-2 only (2026-10-19)
-    // enemies[] is the ones on both difficulties, then normal_only_n only on Normal, then hard_only_n only on Hard (2026-10-23)
-    int normal_only_n, hard_only_n;
+    int enemies_on[3];     // how many of enemies[] each difficulty has (Normal, Hard, Expert; enemy_def::modes, 2026-10-24)
     int hard_skip_check;   // the checkpoint (index into checks[]) Hard leaves out, or -1 (2026-10-23)
     uint32_t hard_skip_mushrooms;   // bit i: Hard leaves out mushrooms[i] (2026-10-23)
     int hard_extra_mushrooms;       // the last this many of mushrooms[] are Hard's own (a blue one in Worlds 1-3)
+    bool hard_no_star;              // Hard leaves out star_block (World 4-1, 2026-10-24)
+    uint32_t expert_skip_mushrooms; // bit i: Expert leaves out mushrooms[i] (Hard's and one more red, 2026-10-24)
 };
 
 #endif

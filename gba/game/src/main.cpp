@@ -128,11 +128,14 @@ constexpr int BOSS_ROCKET_AT = 4;   // drops when hp * 4 <= max hp (20 of 80)
 // A flying demon joins the Fire Skull's fight every BOSS_DEMON_EVERY frames (7 s), at most BOSS_DEMON_MAX alive at a time
 // (user, 2026-10-23). They always chase Mario, and the ones left vanish when the skull dies or Mario does.
 constexpr int BOSS_DEMON_EVERY = 420, BOSS_DEMON_MAX = 2;   // max 3 until later on 2026-10-23 (user)
-// The enemy list holds a level's enemies on either difficulty plus the Fire Skull's demons (72 until Hard's extras, 2026-10-23)
-constexpr int MAX_ENEMIES = 80;
+// The enemy list holds a level's enemies on one difficulty plus the Fire Skull's demons (72 until Hard's extras, 2026-10-23;
+// 80 until Expert's World 4 extras, 2026-10-24: World 4-4 on Expert is 81 + 2)
+constexpr int MAX_ENEMIES = 88;
 constexpr int WASP_HP = 25, EYE_HP = 50, MECH_HP = 65;   // World 1-4's, 2-4's and 3-4's bosses (the user's calls, 2026-10-16; raised 2026-10-19 and 2026-10-23)
-// Hard (user, 2026-10-23): the wasp, eye demon, mech walker and Fire Skull
-constexpr int HARD_WASP_HP = 35, HARD_EYE_HP = 60, HARD_MECH_HP = 75, HARD_BOSS_HP = 100;
+// Hard (user, 2026-10-23; eye, mech and skull raised 2026-10-24): the wasp, eye demon, mech walker and Fire Skull
+constexpr int HARD_WASP_HP = 35, HARD_EYE_HP = 70, HARD_MECH_HP = 85, HARD_BOSS_HP = 110;
+constexpr int EXPERT_WASP_HP = 45, EXPERT_EYE_HP = 80, EXPERT_MECH_HP = 95, EXPERT_BOSS_HP = 130;   // Expert (user, 2026-10-24)
+constexpr double EYE_HARD_SPEED = 1.2;   // Hard: the eye demon floats and dives 20% faster (user, 2026-10-24)
 constexpr int BOSS_SKULL = 0, BOSS_WASP = 1, BOSS_EYE = 2, BOSS_MECH = 3;
 constexpr int SCORE_COIN = 10, SCORE_EMBER = 30, SCORE_ONEUP = 100, SCORE_ENEMY = 200, SCORE_BEAST = 300;
 // The star (user request, 2026-10-18): 10 s of invincibility, flashing, and enemies die at a touch
@@ -151,6 +154,7 @@ constexpr int ROCKET_SPLASH = 32, ROCKET_SPLASH_DMG = 3;   // the blast's reach 
 constexpr int ROCKET_TIME = 1200, ROCKET_DMG = 6, ROCKET_DELAY = 42, ROCKET_NOSE = 9, BOOM_FRAMES = 6, BOOM_STEP = 4;
 const fixed ROCKET_SPEED = fixed(5);
 constexpr int SCORE_FLAWLESS = 1000, SCORE_UNTOUCHED = 5000, SCORE_ALL_EMBERS = 500;   // 200 and 500 until 2026-10-23 (user)
+constexpr int SCORE_ALL_ENEMIES = 1000;   // Hard only: every enemy in the level defeated (user, 2026-10-24)
 constexpr int FOE_ALIEN = 0, FOE_REAPER = 1, FOE_BEAST = 2, FOE_MECH = 3;   // mechs (World 3) act like aliens, with one more HP
 // Flying demons (user request, 2026-10-20): Worlds 2-1 to 2-4 have 8-10 besides their reapers (enemy_def.kind, from
 // levels.js FLYERS). They fly back and forth, bobbing; they don't shoot (user request, same day) but fly straight at
@@ -363,7 +367,7 @@ constexpr bool level_lists_fit()
 {
     for(const level_info& l : levels)
     {
-        if(l.enemies_n - bn::min(l.normal_only_n, l.hard_only_n) + BOSS_DEMON_MAX > MAX_ENEMIES || l.movers_n > 12 || l.embers_n > 80 || l.mushrooms_n > 24 || l.checks_n > 12) return false;
+        if(bn::max(l.enemies_on[0], bn::max(l.enemies_on[1], l.enemies_on[2])) + BOSS_DEMON_MAX > MAX_ENEMIES || l.movers_n > 12 || l.embers_n > 80 || l.mushrooms_n > 24 || l.checks_n > 12) return false;
         if(l.coins_n > 192 || l.oneup_blocks_n > 8) return false;
         int blocks = 0;
         for(int i = 0; i < ROWS * l.width; ++i) if(l.grid[i] == 4) ++blocks;
@@ -399,11 +403,18 @@ state_t state = state_t::title;
 int title_t = 0;
 // Difficulty (user, 2026-10-23), picked on the Select Difficulty menu after PRESS START. "Normal" is the game as it was;
 // in "Hard" every enemy and boss fires 40% more often (hard_frames). Each keeps its own high scores and best time.
-#ifdef SMHB_HARD
-bool hard = true;
+// "Expert" (user, 2026-10-24) is Hard (hard is true for it too) plus more enemies in Worlds 1 and 3 (enemy_def::modes).
+#if defined(SMHB_EXPERT)
+int difficulty = 2;
+#elif defined(SMHB_HARD)
+int difficulty = 1;
 #else
-bool hard = false;
+int difficulty = 0;
 #endif
+bool hard = difficulty >= 1;
+constexpr int DIFFICULTIES = 3;
+constexpr const char* difficulty_names[DIFFICULTIES] = { "Normal", "Hard", "Expert" };
+void set_difficulty(int d) { difficulty = d; hard = d >= 1; }
 // A wait between shots in this difficulty: 1/1.4 of it in Hard, so shots come 40% faster
 int hard_frames(int n) { return hard ? (n * 5 + 3) / 7 : n; }
 bool scores_from_title = false;
@@ -810,10 +821,11 @@ const boss_spec& spec(int kind)
     return specs[kind];
 }
 
-// The boss's full health: its spec's (Normal) or Hard's
+// The boss's full health: its spec's (Normal), Hard's or Expert's
 int boss_max_hp(const boss_t& B)
 {
     if(! hard) return spec(B.kind).hp;
+    if(difficulty == 2) return B.kind == BOSS_SKULL ? EXPERT_BOSS_HP : B.kind == BOSS_WASP ? EXPERT_WASP_HP : B.kind == BOSS_EYE ? EXPERT_EYE_HP : EXPERT_MECH_HP;
     return B.kind == BOSS_SKULL ? HARD_BOSS_HP : B.kind == BOSS_WASP ? HARD_WASP_HP : B.kind == BOSS_EYE ? HARD_EYE_HP : HARD_MECH_HP;
 }
 void make_boss()
@@ -1039,7 +1051,9 @@ void update_boss()
         rocket_item.x = B.cx; rocket_item.y = -14; rocket_item.vy = 0; rocket_item.live = true; rocket_item.fall = true;
         sfx::drop();
     }
-    if(B.kind == BOSS_SKULL && ++B.demon_t >= BOSS_DEMON_EVERY) { B.demon_t = 0; spawn_boss_demon(B); }
+    // (and on Expert the Eye Demon's, the same way: user, 2026-10-24)
+    const bool summons = B.kind == BOSS_SKULL || (difficulty == 2 && B.kind == BOSS_EYE);
+    if(summons && ++B.demon_t >= BOSS_DEMON_EVERY) { B.demon_t = 0; spawn_boss_demon(B); }
     ++B.mt;
     if(mech && (B.mode == boss_t::m_float || B.mode == boss_t::m_rain))
     {
@@ -1051,9 +1065,11 @@ void update_boss()
     }
     else if(B.mode == boss_t::m_float || B.mode == boss_t::m_rain)
     {
-        // Lazy figure-eight across the arena, dipping low enough to be shot from the floor
-        fixed tx = B.cx + sin_deg(fixed(B.t) * fixed(0.63)) * 150, ty = B.home_y + sin_deg(fixed(B.t) * fixed(1.547)) * 38;
-        B.x += (tx - B.x) * fixed(0.04); B.y += (ty - B.y) * fixed(0.05);
+        // Lazy figure-eight across the arena, dipping low enough to be shot from the floor. Hard: the eye demon flies it
+        // 20% faster (the path and the follow rate both, so the same shape; user, 2026-10-24)
+        fixed sp = hard && B.kind == BOSS_EYE ? fixed(EYE_HARD_SPEED) : fixed(1);
+        fixed tx = B.cx + sin_deg(fixed(B.t) * fixed(0.63) * sp) * 150, ty = B.home_y + sin_deg(fixed(B.t) * fixed(1.547) * sp) * 38;
+        B.x += (tx - B.x) * fixed(0.04) * sp; B.y += (ty - B.y) * fixed(0.05) * sp;
     }
     if(B.mode == boss_t::m_float)
     {
@@ -1166,6 +1182,7 @@ void update_boss()
         {
             fixed dx = B.tx - B.x, dy = B.ty - B.y;
             fixed s = wasp ? (rage ? fixed(7) : fixed(5.5)) : skull ? (rage ? fixed(8) : fixed(6.5)) : rage ? fixed(7.5) : fixed(6);
+            if(hard && B.kind == BOSS_EYE) s *= fixed(EYE_HARD_SPEED);   // the eye demon dives 20% faster in Hard
             int d = bn::sqrt(dx.round_integer() * dx.round_integer() + dy.round_integer() * dy.round_integer());
             if(d <= s)
             {
@@ -1329,7 +1346,8 @@ void load_level(int index)
     for(int n = 0; n < mushrooms_n; ++n)
     {
         int i = order[n];
-        if(hard && (L.hard_skip_mushrooms >> i & 1)) continue;   // Hard has fewer red mushrooms in World 4 (2026-10-23)
+        // Hard has fewer red mushrooms (2026-10-23), Expert one fewer still (2026-10-24)
+        if((difficulty == 2 ? L.expert_skip_mushrooms : hard ? L.hard_skip_mushrooms : 0u) >> i & 1) continue;
         mush_t k; k.x = L.mushrooms[i].x; k.y = L.mushrooms[i].y; k.vy = 0; k.blue = L.mushrooms[i].blue;
         k.got = false; k.fall = false; k.boss = false; k.t = rng.get_int(100);
         mushes.push_back(bn::move(k));
@@ -1340,7 +1358,7 @@ void load_level(int index)
         crack_t k; k.tx = tx; k.ty = ty; k.oneup = -1;
         for(int i = 0; i < L.oneup_blocks_n; ++i) if(L.oneup_blocks[i].x == tx && L.oneup_blocks[i].y == ty) k.oneup = i;
         if(L.star_block.x == tx && L.star_block.y == ty) k.oneup = CRACK_STAR;
-        if(k.oneup >= 0 && (run.oneup_got[li] >> k.oneup & 1))
+        if((k.oneup >= 0 && (run.oneup_got[li] >> k.oneup & 1)) || (k.oneup == CRACK_STAR && hard && L.hard_no_star))
         {
             grid[ty * L.width + tx] = 0;   // each hidden 1-up can be claimed once per run
             continue;
@@ -1348,10 +1366,12 @@ void load_level(int index)
         if(k.oneup == -1) ++crack_count;   // (1-up and star blocks hold no coins)
         cracks.push_back(bn::move(k));
     }
-    // The level's enemies: those on both difficulties, then the Normal-only ones, then the Hard-only ones (on Hard some
-    // long-patrolling aliens are two aliens each walking half the stretch, 2026-10-23); pick(i) skips the other's
-    const int both_n = L.enemies_n - L.normal_only_n - L.hard_only_n, enemies_n = L.enemies_n - (hard ? L.normal_only_n : L.hard_only_n);
-    auto pick = [&](int i) -> const enemy_def& { return L.enemies[hard && i >= both_n ? i + L.normal_only_n : i]; };
+    // The level's enemies on this difficulty (on Hard some long-patrolling aliens are two aliens each walking half the
+    // stretch, 2026-10-23; Expert splits more, 2026-10-24): enemy_def::modes says which difficulties have each
+    static int mine[256];
+    int enemies_n = 0;
+    for(int i = 0; i < L.enemies_n; ++i) if(L.enemies[i].modes >> difficulty & 1) mine[enemies_n++] = i;
+    auto pick = [&](int i) -> const enemy_def& { return L.enemies[mine[i]]; };
     order = by_x(enemies_n, [&](int i) { return pick(i).a; });
     enemy_reach = 0;
     for(int n = 0; n < enemies_n; ++n)
@@ -2013,7 +2033,7 @@ void update_world()
             }
             e.y = e.y0 + bob;
         }
-        if(e.alert) continue;   // stands its ground while attacking
+        if(e.alert || e.a == e.b) continue;   // stands its ground while attacking (a guard with no room to walk always)
         e.x += e.vx;
         if(e.x < e.a) { e.x = e.a; e.vx = -e.vx; }
         if(e.x > e.b) { e.x = e.b; e.vx = -e.vx; }
@@ -2186,8 +2206,10 @@ void update_foes()
         if(++e.windup >= FOE_WINDUP)
         {
             // Beasts alternate an aimed three-way spread with a wide five-way fan; the others spit single globs more often
-            // (Hard: the whole wind-up-and-fire cycle is 1/1.4 as long; the wind-up flash keeps its length)
-            e.windup = 0; e.cool = hard_frames(FOE_WINDUP + (beast ? 55 : 40) + rng.get_int(25)) - FOE_WINDUP;
+            // (Hard: the whole wind-up-and-fire cycle is 1/1.4 as long; Expert: 1/1.25 of Hard's, user 2026-10-24; the
+            // wind-up flash keeps its length)
+            const int cycle = FOE_WINDUP + (beast ? 55 : 40) + rng.get_int(25);
+            e.windup = 0; e.cool = (difficulty == 2 ? (cycle * 4 + 3) / 7 : hard_frames(cycle)) - FOE_WINDUP;
             fixed a = angle_of(dx, dy), s = beast ? BEAST_SHOT_SPEED : fixed(2.8);
             if(beast)
             {
@@ -2418,41 +2440,46 @@ void update_hud()
 // The tag's 5th character is the number of levels in a full run: a best time saved by the old 3-level game ("SMHB",
 // no count) can't be compared with a run through all 6, so it's ignored
 // Hard's best time is kept apart (at BEST_HARD_OFFSET, with an 'H' after the count) from Normal's, which stays at 0
+// (Expert's at BEST_EXPERT_OFFSET with an 'E')
 struct save_data { char tag[8]; int best; };
-constexpr int BEST_HARD_OFFSET = 32;
+constexpr int BEST_HARD_OFFSET = 32, BEST_EXPERT_OFFSET = 48;
+constexpr char difficulty_mark[DIFFICULTIES] = { char(0), 'H', 'E' };
+int best_offset() { return difficulty == 2 ? BEST_EXPERT_OFFSET : difficulty == 1 ? BEST_HARD_OFFSET : 0; }
 int read_best()
 {
-    save_data s; bn::sram::read_offset(s, hard ? BEST_HARD_OFFSET : 0);
+    save_data s; bn::sram::read_offset(s, best_offset());
     return (s.tag[0] == 'S' && s.tag[1] == 'M' && s.tag[2] == 'H' && s.tag[3] == 'B' && s.tag[4] == '0' + level_count &&
-            (! hard || s.tag[5] == 'H') && s.best > 0) ? s.best : -1;
+            (! difficulty || s.tag[5] == difficulty_mark[difficulty]) && s.best > 0) ? s.best : -1;
 }
 void write_best(int v)
 {
-    save_data s = { { 'S', 'M', 'H', 'B', char('0' + level_count), hard ? 'H' : char(0), 0, 0 }, v };
-    bn::sram::write_offset(s, hard ? BEST_HARD_OFFSET : 0);
+    save_data s = { { 'S', 'M', 'H', 'B', char('0' + level_count), difficulty_mark[difficulty], 0, 0 }, v };
+    bn::sram::write_offset(s, best_offset());
 }
+static_assert(BEST_EXPERT_OFFSET + sizeof(save_data) <= 64, "the best times overlap the high scores");
 
 // High scores (user, 2026-10-22): the top 5 runs with arcade-style initials and how far each got, saved after the best
 // time (which stays where it was). A run ends at the Congratulations screen or by leaving game over for the title;
 // retrying a level after game over carries the run on, so it isn't recorded until then.
 // Normal and Hard keep separate tables (user, 2026-10-23): Normal's where the one table always was, Hard's (tag "SMHS"
 // + count + 'H') at HS_HARD_OFFSET. Both remember the last initials typed.
-constexpr int HS_COUNT = 5, HS_OFFSET = 64, HS_HARD_OFFSET = 128;
+// Expert's ('E') at HS_EXPERT_OFFSET (2026-10-24).
+constexpr int HS_COUNT = 5, HS_OFFSET = 64, HS_HARD_OFFSET = 128, HS_EXPERT_OFFSET = 192;
 struct hs_entry { char name[3]; uint8_t level; int score; };   // level = index reached, level_count = beat the game
 struct hs_table { char tag[8]; hs_entry e[HS_COUNT]; char last[3]; };
 static_assert(sizeof(hs_table) <= HS_HARD_OFFSET - HS_OFFSET, "the high-score tables overlap");
-BN_DATA_EWRAM hs_table hs_tables[2];   // [0] Normal, [1] Hard
+BN_DATA_EWRAM hs_table hs_tables[DIFFICULTIES];   // [0] Normal, [1] Hard, [2] Expert
 bool hs_loaded = false;
-int hs_offset(int d) { return d ? HS_HARD_OFFSET : HS_OFFSET; }
+int hs_offset(int d) { return d == 2 ? HS_EXPERT_OFFSET : d ? HS_HARD_OFFSET : HS_OFFSET; }
 void hs_load()
 {
     if(hs_loaded) return;
     hs_loaded = true;
-    for(int d = 0; d < 2; ++d)
+    for(int d = 0; d < DIFFICULTIES; ++d)
     {
         hs_table& t = hs_tables[d];
         bn::sram::read_offset(t, hs_offset(d));
-        const char mark = d ? 'H' : char(0);
+        const char mark = difficulty_mark[d];
         if(t.tag[0] != 'S' || t.tag[1] != 'M' || t.tag[2] != 'H' || t.tag[3] != 'S' || t.tag[4] != '0' + level_count || (d && t.tag[5] != mark))
         {
             t = hs_table();
@@ -2463,7 +2490,7 @@ void hs_load()
     }
 }
 // This run's table (the difficulty being played)
-hs_table& hs_now() { hs_load(); return hs_tables[hard ? 1 : 0]; }
+hs_table& hs_now() { hs_load(); return hs_tables[difficulty]; }
 // The place a score would take (0-based), or -1 if it doesn't make the table; ties go below the older score
 int hs_rank(int score)
 {
@@ -2479,7 +2506,7 @@ void hs_insert(int rank, const char name[3], int score, int level)
     hs_entry& e = hs.e[rank];
     for(int i = 0; i < 3; ++i) e.name[i] = name[i];
     e.level = uint8_t(level); e.score = score;
-    for(int d = 0; d < 2; ++d)
+    for(int d = 0; d < DIFFICULTIES; ++d)
     {
         for(int i = 0; i < 3; ++i) hs_tables[d].last[i] = name[i];
         bn::sram::write_offset(hs_tables[d], hs_offset(d));
@@ -2560,8 +2587,12 @@ void draw_difficulty()
 {
     clear_overlay();
     overlay_line(-44, "SELECT DIFFICULTY", true);
-    overlay_line(-14, hard ? "Normal" : "> Normal <");
-    overlay_line(2, hard ? "> Hard <" : "Hard");
+    for(int d = 0; d < DIFFICULTIES; ++d)
+    {
+        bn::string<16> item = difficulty_names[d];
+        if(d == difficulty) { item = "> "; item += difficulty_names[d]; item += " <"; }
+        overlay_line(-22 + d * 16, item);
+    }
     overlay_line(54, "UP/DOWN: choose     A: start     B: back");
 }
 void show_difficulty()
@@ -2572,7 +2603,11 @@ void show_difficulty()
 }
 void update_difficulty()
 {
-    if(K.up_pressed || K.down_pressed) { hard = ! hard; sfx::letter(); draw_difficulty(); }
+    if(K.up_pressed || K.down_pressed)
+    {
+        set_difficulty((difficulty + (K.down_pressed ? 1 : DIFFICULTIES - 1)) % DIFFICULTIES);
+        sfx::letter(); draw_difficulty();
+    }
     else if(K.b_pressed) show_title(true);
 }
 
@@ -2599,6 +2634,11 @@ void clear_level()
     bool flawless = lvl.deaths == 0, untouched = ! lvl.hurt;
     if(flawless) add_score(SCORE_FLAWLESS);
     if(untouched) add_score(SCORE_UNTOUCHED);
+    // Hard: defeating every one of the level's enemies earns a bonus too (the Fire Skull's summoned demons don't count;
+    // enemies stay defeated when Mario dies)
+    bool all_foes = hard && ! enemies.empty();
+    for(const enemy_t& e : enemies) if(e.alive && ! e.minion) { all_foes = false; break; }
+    if(all_foes) add_score(SCORE_ALL_ENEMIES);
     // The bonuses get two lines: all three on one ran off the screen's sides
     bn::string<48> bonus, bonus2;
     auto add = [](bn::string<48>& line, const char* name, int n)
@@ -2609,6 +2649,7 @@ void clear_level()
     if(ember_total && lvl.embers == ember_total) add(bonus, "All embers", SCORE_ALL_EMBERS);
     if(flawless) add(bonus, "No-death", SCORE_FLAWLESS);
     if(untouched) add(bonus2, "No-damage", SCORE_UNTOUCHED);
+    if(all_foes) add(bonus2, "All enemies", SCORE_ALL_ENEMIES);
     clear_overlay();
     if(last)
     {
@@ -2651,7 +2692,7 @@ void show_win_stats()
     overlay_line(-28, a);
     bn::string<48> b = "Total time "; b += fmt_time(run.time); b += "   Falls "; b += bn::to_string<4>(run.deaths);
     overlay_line(-16, b);
-    bn::string<32> s = "Score "; s += pad6(run.score); s += hard ? "   Hard" : "   Normal";
+    bn::string<32> s = "Score "; s += pad6(run.score); s += "   "; s += difficulty_names[difficulty];
     overlay_line(-2, s);
     int best = read_best();
     bn::string<48> bt;
@@ -2764,13 +2805,14 @@ void update_initials()
     for(int i = 0; i < 3; ++i) for(bn::sprite_ptr& s : hs_letter_spr[i]) s.set_visible(i != hs_pos || hs_blink % 40 < 28);
 }
 
-int hs_view = 0;   // the table on show: 0 Normal, 1 Hard (LEFT/RIGHT switch)
+int hs_view = 0;   // the table on show: 0 Normal, 1 Hard, 2 Expert (LEFT/RIGHT switch)
 void draw_scores(int highlight)
 {
     const hs_table& hs = hs_tables[hs_view];
     hs_clear_sprites(); clear_overlay();
     overlay_line(-58, "HIGH SCORES", true);
-    overlay_line(-42, hs_view ? "<  HARD  >" : "<  NORMAL  >");
+    static constexpr const char* heads[DIFFICULTIES] = { "<  NORMAL  >", "<  HARD  >", "<  EXPERT  >" };
+    overlay_line(-42, heads[hs_view]);
     for(int i = 0; i < HS_COUNT; ++i)
     {
         const hs_entry& e = hs.e[i];
@@ -2794,7 +2836,7 @@ void show_scores(bool from_title, int highlight)
     hs_load();
     state = state_t::scores; scores_from_title = from_title;
     set_dim(true);
-    hs_view = from_title ? 0 : hard ? 1 : 0;
+    hs_view = from_title ? 0 : difficulty;
     hs_new_rank = highlight; hs_blink = 0;
     draw_scores(highlight);
 }
@@ -2805,9 +2847,9 @@ void update_scores()
     for(bn::sprite_ptr& s : hs_row_spr) s.set_visible(hs_blink % 40 < 28);
     if(K.left_pressed || K.right_pressed)
     {
-        hs_view = 1 - hs_view; sfx::letter();
+        hs_view = (hs_view + (K.right_pressed ? 1 : DIFFICULTIES - 1)) % DIFFICULTIES; sfx::letter();
         // The new entry's row only blinks on its own table
-        draw_scores(! scores_from_title && hs_view == (hard ? 1 : 0) ? hs_new_rank : -1);
+        draw_scores(! scores_from_title && hs_view == difficulty ? hs_new_rank : -1);
     }
     if(scores_from_title)
     {
@@ -3063,11 +3105,11 @@ void draw()
         if(e.kind == FOE_ALIEN)
         {
             bool show = (e.alive || e.squish <= 24) && near_view(cx - 32, foot - 64, 64, 64);
-            bool idle = e.alert || ! e.alive;
+            bool idle = e.alert || ! e.alive || e.a == e.b;   // (a guard: Expert's 2-column patrols)
             int gfx = idle ? 6 + (e.t / 8) % 4 : (e.x.floor_integer() / 4) % 6;
             bn::sprite_ptr* s = ensure(e.spr, show, bn::sprite_items::alien, gfx, 5, false, true);
             if(! s) continue;
-            int dir = e.alert ? e.dir : (e.vx > 0 ? 1 : -1);
+            int dir = e.alert ? e.dir : e.a == e.b ? (p.x > e.x ? 1 : -1) : (e.vx > 0 ? 1 : -1);   // a guard watches Mario
             place(e.spr, cx, foot - 32, dir > 0);   // the art faces left
             set_flash(e.spr, ! e.alive || (e.hit > 0 && e.hit % 4 < 2) || (e.windup > 0 && (e.windup / 3) % 2), bn::sprite_items::alien, bn::sprite_palette_items::alien_flash);
             s->set_visible(e.alive || (e.squish / 2) % 2 == 0);
@@ -3076,10 +3118,10 @@ void draw()
         {
             // A mech walks (10 frames, stepped by distance) and stands still on its first frame while it attacks
             bool show = (e.alive || e.squish <= 24) && near_view(cx - 32, foot - 64, 64, 64);
-            int gfx = e.alert || ! e.alive ? 0 : (e.x.floor_integer() / 3) % 10;
+            int gfx = e.alert || ! e.alive || e.a == e.b ? 0 : (e.x.floor_integer() / 3) % 10;
             bn::sprite_ptr* s = ensure(e.spr, show, bn::sprite_items::mech, gfx, 5, false, true);
             if(! s) continue;
-            int dir = e.alert ? e.dir : (e.vx > 0 ? 1 : -1);
+            int dir = e.alert ? e.dir : e.a == e.b ? (p.x > e.x ? 1 : -1) : (e.vx > 0 ? 1 : -1);   // a guard watches Mario
             place(e.spr, cx, foot - 32, dir < 0);   // the art faces right
             set_flash(e.spr, ! e.alive || (e.hit > 0 && e.hit % 4 < 2) || (e.windup > 0 && (e.windup / 3) % 2), bn::sprite_items::mech, bn::sprite_palette_items::mech_flash);
             s->set_visible(e.alive || (e.squish / 2) % 2 == 0);
@@ -3268,7 +3310,7 @@ void read_keys()
     K = keys_t();
     if(f == 150)
     {
-        static constexpr int scene_level[] = { 0, 0, 0, 4, 15, 15, 4, 0, 4, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 15, 2, 7, 15, 1, 4, 9, 12, 1, 2, 4, 12, 4, 3, 13, 2, 1, 0, 0, 4, 8, 0, 3, 0 };   // level indexes: 4 Graveyard, 8 City, 12 World 4-1, 15 Hell
+        static constexpr int scene_level[] = { 0, 0, 0, 4, 15, 15, 4, 0, 4, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 0, 15, 2, 7, 15, 1, 4, 9, 12, 1, 2, 4, 12, 4, 3, 13, 2, 1, 0, 0, 4, 8, 0, 3, 0, 7, 12, 0, 0, 4 };   // level indexes: 4 Graveyard, 8 City, 12 World 4-1, 15 Hell
 #if SMHB_SCENE == 42 || SMHB_SCENE == 47
         return;   // this one starts from the title
 #endif   // level indexes: 4 Graveyard, 8 City, 12 World 4-1, 15 Hell
@@ -3276,8 +3318,11 @@ void read_keys()
         return;
     }
     if(g <= 0) return;
-#if SMHB_SCENE == 1
+#if SMHB_SCENE == 1 || SMHB_SCENE == 50   // 50: the same with every enemy gone (Hard's all-enemies bonus)
     if(g == 2) teleport(42, 14);
+#if SMHB_SCENE == 50
+    if(g == 3) for(enemy_t& e : enemies) { e.alive = false; e.squish = 1000; }
+#endif
     if(g == 420) teleport(433, 12);   // next to the exit door (col 436 since the level doubled), to check the level-clear screen
     K.down = g > 240 && g < 330;
     K.right = g >= 330 && (g < 420 || p.x + p.w / 2 < door.x + 8);   // stops in front of the door
@@ -3290,7 +3335,7 @@ void read_keys()
     if(got_at < 0 && run.lives > MAX_LIVES) got_at = g;
     K.left = g == 5 || (g > 120 && (got_at < 0 || g < got_at + 15));
     K.fire = g > 10 && g < 40;
-#elif SMHB_SCENE == 23 || SMHB_SCENE == 24
+#elif SMHB_SCENE == 23 || SMHB_SCENE == 24 || SMHB_SCENE == 49   // 49: World 4-1 (no star block on Hard)
     if(g == 2) { teleport(LV().star_block.x - 4, LV().star_block.y + 1); p.face = 1; }
     // (then left: World 1-1's star block is near a ledge's end, with an alien patrolling behind Mario)
     static int got_at = -1;
@@ -3424,10 +3469,10 @@ void read_keys()
     if(g == 480) K.select_pressed = true;             // title -> table
     if(g == 600) K.b_pressed = true;                  // and back
 #elif SMHB_SCENE == 42
-    // Select Difficulty: START on the title, DOWN to Hard, A to start; then game over with a made-up score, START to
-    // the initials, START to keep them, the Hard table, RIGHT to the Normal one, A back to the title
+    // Select Difficulty: START on the title, DOWN twice to Expert, A to start; then game over with a made-up score, START
+    // to the initials, START to keep them, the Expert table, RIGHT to the Normal one (it wraps), A back to the title
     if(g == 30) K.start_pressed = true;
-    if(g == 90) K.down_pressed = true;
+    if(g == 90 || g == 120) K.down_pressed = true;
     if(g == 150) K.a_pressed = true;
     if(g == 240 && state == state_t::play) { run.score = 23456; game_over(); }
     if(g == 300) K.start_pressed = true;
@@ -3446,6 +3491,16 @@ void read_keys()
     // World 1-1 beside Hard's blue mushroom (column 118, row 8): nothing there on Normal
     if(g == 2) teleport(114, 9);
     p.hp = MAX_HP;
+#elif SMHB_SCENE == 51
+    // World 1-1 beside the alien patrol at columns 101-105 (row 11): one alien on Normal and Hard, on Expert a guard at
+    // 101-102 that stands still facing Mario and an alien walking 103-105
+    if(g == 2) teleport(96, 12);
+    p.hp = MAX_HP;
+#elif SMHB_SCENE == 52
+    // World 2-1 on the plank at columns 207-209 (row 10), between two of Expert's new reapers (planks 202-204 and
+    // 212-214, row 12): both empty on Normal and Hard
+    if(g == 2) teleport(208, 10);
+    p.hp = MAX_HP;
 #elif SMHB_SCENE == 47
     // The title menu: DOWN to Controls, A (captures about 1 s later), B back, DOWN to High Scores, A, B back, then DOWN
     // to Credits and A
@@ -3457,7 +3512,7 @@ void read_keys()
     if(g == 360) K.b_pressed = true;
     if(g == 390) K.down_pressed = true;
     if(g == 420) K.a_pressed = true;
-#elif SMHB_SCENE == 5 || SMHB_SCENE == 46   // 46: the same in World 1-4 (the Alien Wasp; on Hard its blue mushroom)
+#elif SMHB_SCENE == 5 || SMHB_SCENE == 46 || SMHB_SCENE == 48   // 46: the same in World 1-4 (the Alien Wasp; on Hard its blue mushroom); 48: World 2-4 (the Eye Demon)
     // From just before the boss checkpoint (6 tiles before the arena's gate), well into the arena
     if(g == 2) teleport(LV().boss_gate - 6, 14);
     K.right = g > 10 && p.x < (LV().boss_gate + 8) * T;
